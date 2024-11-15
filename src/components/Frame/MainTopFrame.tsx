@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/resizable";
 import { useConvertToImage } from "@/hooks/useConvertToImage";
 import { SocketManager } from "@/lib/socketManager";
-import { initFileStructSync } from "@/lib/yjs";
+import { initCommentStructSync, initFileStructSync } from "@/lib/yjs";
 import { sectionSelectStore } from "@/stores/chattingRoom.store";
 import { useCommunicationStore } from "@/stores/communicationState.store";
 import { fileSysyemStore } from "@/stores/github.store";
@@ -28,12 +28,14 @@ const MainTopFrom = () => {
   const bottomSection = sectionSelectStore((state) => state.bottomSection);
   const bindingRef = useRef<MonacoBinding | null>(null);
   const commitFileList = fileSysyemStore((state) => state.commitFileList);
+  const commentsList = fileSysyemStore((state) => state.commentsList);
   const [editor, setEditor] = useState<editor.IStandaloneCodeEditor | null>(
     null,
   );
   const initCommitFileList = fileSysyemStore(
     (state) => state.initCommitFileList,
   );
+  const initCommentsList = fileSysyemStore((state) => state.initCommentsList);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const elementRef = useRef<HTMLDivElement>(null);
   const { convertToImage } = useConvertToImage({ elementRef, size });
@@ -85,6 +87,11 @@ const MainTopFrom = () => {
     initFileStructSync(ydoc, provider, commitFileList, initCommitFileList);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [provider, ydoc]);
+
+  useEffect(() => {
+    initCommentStructSync(ydoc, provider, commentsList, initCommentsList);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [provider, ydoc, commentsList]);
 
   useEffect(() => {
     if (!commitFileList || commitFileList.length === 0) return;

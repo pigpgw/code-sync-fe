@@ -13,7 +13,7 @@ import {
 } from "@/lib/file";
 import { ADDITIONAL_FILES } from "@/constant/github";
 
-interface PrInfoProps {
+export interface PrInfoProps {
   userId: string;
   requireUserInfo: PrUserInfo;
   requestUserInfo: PrUserInfo;
@@ -102,7 +102,8 @@ interface fileSysyemPropsStore {
   initCommitFileList: (commitFileList: PrChangedFileInfo[]) => void;
   addClickedFileList: (newFile: PrChangedFileInfo) => void;
   removeClickedFileList: (newFile: PrChangedFileInfo) => void;
-  setCommentsList: (prMetaData: PrCommentMetaDataInfo) => void;
+  setCommentsList: (prMetaData: PrCommentMetaDataInfo) => Promise<void>;
+  initCommentsList: (commentsList: PrCommentsListInfo[]) => void;
 }
 
 export const prMetaDataStore = create<prMetaDataPropsStore>()((set) => ({
@@ -289,6 +290,7 @@ export const fileSysyemStore = create<fileSysyemPropsStore>()((set, get) => ({
     }
   },
   initCommitFileList: (commitFileList) => set({ commitFileList }),
+  initCommentsList: (commentsList) => set({ commentsList }),
 
   setCommentsList: async ({ owner, repo, prNumber }) => {
     const commitFileList = new Map();
@@ -344,6 +346,6 @@ export const fileSysyemStore = create<fileSysyemPropsStore>()((set, get) => ({
         console.error(e);
       }
     };
-    getComments();
+    await getComments();
   },
 }));

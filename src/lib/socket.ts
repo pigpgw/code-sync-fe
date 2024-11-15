@@ -1,6 +1,15 @@
 import { extractGitHubPrDetails } from "@/lib/github";
 import { SocketManager } from "@/lib/socketManager";
-import { fileSysyemStore, prMetaDataStore } from "@/stores/github.store";
+import {
+  persistPrInfoToYdoc,
+  restorePrSnapshotFromYdoc,
+  waitForYdocSync,
+} from "@/lib/yjs";
+import {
+  fileSysyemStore,
+  prInfoStore,
+  prMetaDataStore,
+} from "@/stores/github.store";
 import { userMediaStore } from "@/stores/userMedia.store";
 import { io, Socket } from "socket.io-client";
 
@@ -64,6 +73,9 @@ export const addInviteAcceptedListener = async ({
   const setIsCreator = userMediaStore.getState().setIsCreator;
   const setCommitFileList = fileSysyemStore.getState().setCommitFileList;
   const setCommentsList = fileSysyemStore.getState().setCommentsList;
+  const initCommitFileList = fileSysyemStore.getState().initCommitFileList;
+  const initCommentsList = fileSysyemStore.getState().initCommentsList;
+  const setPrInfo = prInfoStore.getState().setPrInfo;
 
   return new Promise<boolean>((resolve) =>
     socket
@@ -81,9 +93,31 @@ export const addInviteAcceptedListener = async ({
         socket.emit("share-peer-id", {
           peerId: SocketManager.getInstance().peerConnection.id,
         });
+
+        if (role !== "creator") {
+          resolve(true);
+          return;
+        }
+
+        const { ydoc, provider } = SocketManager.getInstance().yjsSocket;
+        await waitForYdocSync(provider);
+
+        const isSnapshotRestored = restorePrSnapshotFromYdoc(
+          ydoc,
+          initCommitFileList,
+          initCommentsList,
+          setPrInfo,
+        );
+
+        if (isSnapshotRestored) {
+          resolve(true);
+          return;
+        }
+
         await setCommitFileList({ owner, prNumber: +prNumber, repo, prUrl })
-          .then(() => {
-            setCommentsList({ owner, prNumber: +prNumber, repo });
+          .then(async () => {
+            await setCommentsList({ owner, prNumber: +prNumber, repo });
+            persistPrInfoToYdoc(ydoc, prInfoStore.getState().prInfo);
             resolve(true);
             setIsCreator(true);
           })

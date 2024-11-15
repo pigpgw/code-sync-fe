@@ -1,4 +1,8 @@
-import { PrChangedFileInfo } from "@/stores/github.store";
+import {
+  PrChangedFileInfo,
+  PrCommentsListInfo,
+  PrInfoProps,
+} from "@/stores/github.store";
 import { WebsocketProvider } from "y-websocket";
 import * as Y from "yjs";
 const YJS_SOCKET = import.meta.env.VITE_YJS_URL || "wss://demos.yjs.dev/ws";
@@ -22,6 +26,74 @@ export const initializeYjsSocket = async ({
       });
     },
   );
+};
+
+export const waitForYdocSync = (provider: WebsocketProvider) => {
+  if (provider.synced) {
+    return Promise.resolve();
+  }
+
+  return new Promise<void>((resolve) => {
+    const handleSync = (isSynced: boolean) => {
+      if (!isSynced) return;
+
+      provider.off("sync", handleSync);
+      resolve();
+    };
+
+    provider.on("sync", handleSync);
+  });
+};
+
+export const persistPrInfoToYdoc = (ydoc: Y.Doc, prInfo: PrInfoProps) => {
+  const prInfoMetadata = ydoc.getMap<PrInfoProps>("prInfoMetadata");
+
+  if (!prInfoMetadata.has("value")) {
+    prInfoMetadata.set("value", prInfo);
+  }
+};
+
+export const restorePrSnapshotFromYdoc = (
+  ydoc: Y.Doc,
+  initCommitFileList: (commitFileList: PrChangedFileInfo[]) => void,
+  initCommentsList: (commentsList: PrCommentsListInfo[]) => void,
+  setPrInfo: (prInfo: PrInfoProps) => void,
+) => {
+  const fileMetadata = ydoc.getArray<PrChangedFileInfo>("fileMetadata");
+
+  if (fileMetadata.length === 0) {
+    return false;
+  }
+
+  const files = fileMetadata.toArray().map((metadata) => ({
+    filename: metadata.filename,
+    language: metadata.language,
+    status: metadata.status,
+    beforeContent: metadata.beforeContent,
+    afterContent: metadata.afterContent,
+    additions: metadata.additions,
+    deletions: metadata.deletions,
+  }));
+
+  const commentMetadata =
+    ydoc.getArray<PrCommentsListInfo>("commentMetadata");
+  const comments = commentMetadata.toArray().map((comment) => ({
+    filepath: comment.filepath,
+    filename: comment.filename,
+    line: comment.line,
+    comments: comment.comments,
+  }));
+
+  const prInfo = ydoc.getMap<PrInfoProps>("prInfoMetadata").get("value");
+
+  initCommitFileList(files);
+  initCommentsList(comments);
+
+  if (prInfo) {
+    setPrInfo(prInfo);
+  }
+
+  return true;
 };
 
 export const initFileStructSync = (
@@ -65,6 +137,42 @@ export const initFileStructSync = (
             deletions: metadata.deletions,
           }));
         initCommitFileList(files);
+      }
+    }
+  });
+};
+
+export const initCommentStructSync = (
+  ydoc: Y.Doc,
+  provider: WebsocketProvider,
+  commentsList: PrCommentsListInfo[],
+  initCommentsList: (commentsList: PrCommentsListInfo[]) => void,
+) => {
+  const commentMetadata =
+    ydoc.getArray<PrCommentsListInfo>("commentMetadata");
+  provider.on("sync", (isSynced: boolean) => {
+    if (isSynced) {
+      if (commentsList?.length && commentMetadata.length === 0) {
+        commentMetadata.delete(0, commentMetadata.length);
+        commentsList.forEach((comment) => {
+          commentMetadata.push([
+            {
+              filepath: comment.filepath,
+              filename: comment.filename,
+              line: comment.line,
+              comments: comment.comments,
+            },
+          ]);
+        });
+      } else if (commentsList.length === 0 && commentMetadata.length > 0) {
+        initCommentsList(
+          commentMetadata.toArray().map((comment) => ({
+            filepath: comment.filepath,
+            filename: comment.filename,
+            line: comment.line,
+            comments: comment.comments,
+          })),
+        );
       }
     }
   });
